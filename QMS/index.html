@@ -83,7 +83,6 @@
       box-sizing: border-box;
     }
 
-    .start-btn { background: #f59e0b; }
     .customer-pin-btn { background: #10b981; }
 
     .active-mode {
@@ -233,7 +232,6 @@
     <div id="map"></div>
     
     <div class="map-controls">
-      <button id="setStartBtn" class="map-btn start-btn" onclick="setMapMode('start')">📍 Set My Starting Location</button>
       <button id="setCustBtn" class="map-btn customer-pin-btn" onclick="setMapMode('customer')">🎯 Pin Customer Location</button>
       <span id="mapStatus" style="font-size: 12px; color: #4b5563;">Mode: <strong>Normal (Click map to add Shop)</strong></span>
     </div>
@@ -285,8 +283,7 @@
     onSnapshot, 
     doc, 
     updateDoc, 
-    deleteDoc, 
-    setDoc 
+    deleteDoc 
   } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
   // Your Firebase configuration keys
@@ -307,37 +304,28 @@
   // References
   const ordersRef = collection(db, "orders");
   const shopsRef = collection(db, "shops");
-  const settingsRef = doc(db, "settings", "user_config");
 
-  // Global Variables - Default Home Base Set Here:
+  // Global Variables
   let activeMode = 'normal';
-  let userStartPos = { lat: 13.937577, lng: 121.604071 };
   let customShops = [];
   let orders = [];
 
-  let startMarker = null;
   let tempCustomerMarker = null;
   let mapMarkers = [];
   let orderCustomerMarkers = [];
   let routingControl = null;
 
-  // Initialize map centered at Home Base
+  // Initialize map centered at Lucena area default view
   const map = L.map('map', {
     tap: false,
     touchZoom: true,
     bounceAtZoomLimits: false
-  }).setView([userStartPos.lat, userStartPos.lng], 16);
+  }).setView([13.937577, 121.604071], 15);
 
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,
     attribution: '© OpenStreetMap contributors'
   }).addTo(map);
-
-  const greenStartIcon = L.icon({
-    iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png',
-    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
-    iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41]
-  });
 
   const redCustomerIcon = L.icon({
     iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
@@ -345,27 +333,16 @@
     iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41]
   });
 
-  function renderStartMarker() {
-    if (startMarker) map.removeLayer(startMarker);
-    startMarker = L.marker([userStartPos.lat, userStartPos.lng], { icon: greenStartIcon }).addTo(map);
-    startMarker.bindPopup("<b>🏠 Your Home Starting Base</b>");
-  }
-
   window.setMapMode = function(mode) {
     if (activeMode === mode) activeMode = 'normal';
     else activeMode = mode;
 
-    const startBtn = document.getElementById('setStartBtn');
     const custBtn = document.getElementById('setCustBtn');
     const statusLabel = document.getElementById('mapStatus');
 
-    startBtn.classList.remove('active-mode');
     custBtn.classList.remove('active-mode');
 
-    if (activeMode === 'start') {
-      startBtn.classList.add('active-mode');
-      statusLabel.innerHTML = 'Mode: <strong style="color:#f59e0b;">Click map to set your Starting Hub!</strong>';
-    } else if (activeMode === 'customer') {
+    if (activeMode === 'customer') {
       custBtn.classList.add('active-mode');
       statusLabel.innerHTML = 'Mode: <strong style="color:#10b981;">Click map to select Customer Location!</strong>';
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -375,15 +352,6 @@
   };
 
   // Realtime Database Listeners
-  onSnapshot(settingsRef, (docSnap) => {
-    if (docSnap.exists() && docSnap.data().startPos) {
-      userStartPos = docSnap.data().startPos;
-    } else {
-      setDoc(settingsRef, { startPos: userStartPos });
-    }
-    renderStartMarker();
-  });
-
   onSnapshot(shopsRef, (snapshot) => {
     customShops = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     renderShops();
@@ -431,14 +399,6 @@
     const lat = e.latlng.lat;
     const lng = e.latlng.lng;
 
-    if (activeMode === 'start') {
-      userStartPos = { lat, lng };
-      await setDoc(settingsRef, { startPos: userStartPos });
-      renderStartMarker();
-      setMapMode('normal');
-      return;
-    }
-
     if (activeMode === 'customer') {
       document.getElementById('customerLat').value = lat;
       document.getElementById('customerLng').value = lng;
@@ -476,7 +436,7 @@
     }).addTo(map);
   }
 
-  // OPTION 2: Live GPS Navigation with Home Base Fallback
+  // Live GPS Navigation
   window.navigateToCustomer = function(orderId) {
     const order = orders.find(o => o.id === orderId);
     if (!order) return;
@@ -490,15 +450,12 @@
           window.scrollTo({ top: 0, behavior: 'smooth' });
         },
         (error) => {
-          alert("GPS unavailable or permission denied. Falling back to Home Base location.");
-          calculateRoute(userStartPos.lat, userStartPos.lng, order.lat, order.lng);
-          window.scrollTo({ top: 0, behavior: 'smooth' });
+          alert("GPS signal unavailable or permission denied. Please ensure location service is allowed.");
         },
         { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
       );
     } else {
-      calculateRoute(userStartPos.lat, userStartPos.lng, order.lat, order.lng);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      alert("Geolocation is not supported by your browser.");
     }
   };
 
@@ -517,15 +474,12 @@
           window.scrollTo({ top: 0, behavior: 'smooth' });
         },
         (error) => {
-          alert("GPS unavailable or permission denied. Falling back to Home Base location.");
-          calculateRoute(userStartPos.lat, userStartPos.lng, shop.lat, shop.lng);
-          window.scrollTo({ top: 0, behavior: 'smooth' });
+          alert("GPS signal unavailable or permission denied. Please ensure location service is allowed.");
         },
         { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
       );
     } else {
-      calculateRoute(userStartPos.lat, userStartPos.lng, shop.lat, shop.lng);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      alert("Geolocation is not supported by your browser.");
     }
   };
 
@@ -616,8 +570,6 @@
       await deleteDoc(doc(db, "orders", id));
     }
   };
-
-  renderStartMarker();
 </script>
 
 </body>
