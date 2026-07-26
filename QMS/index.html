@@ -127,22 +127,27 @@
       color: #6b7280;
     }
 
-    /* Stack form elements neatly on mobile screen width */
+    /* Strict Mobile-First Form Layout Fix */
     form {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      width: 100%;
-      box-sizing: border-box;
+      display: flex !important;
+      flex-direction: column !important;
+      gap: 10px !important;
+      width: 100% !important;
+      max-width: 100% !important;
+      box-sizing: border-box !important;
     }
 
-    input, select, button {
-      padding: 10px;
+    /* Force all inputs to stack neatly on top of each other */
+    form input, form select, form button {
+      display: block !important;
+      width: 100% !important;
+      max-width: 100% !important;
+      min-width: 0 !important; /* Prevents text boxes from expanding past parent width */
+      padding: 10px !important;
       border: 1px solid var(--border);
       border-radius: 6px;
       font-size: 14px;
-      width: 100%;
-      box-sizing: border-box;
+      box-sizing: border-box !important;
     }
 
     button {
@@ -206,7 +211,7 @@
       background: #ef4444;
       padding: 8px 12px;
       font-size: 12px;
-      width: auto;
+      width: auto !important;
     }
 
     .coords-badge {
@@ -268,7 +273,6 @@
 
 <!-- Leaflet JS -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css"></script>
 <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
 
 <!-- Firebase SDKs -->
