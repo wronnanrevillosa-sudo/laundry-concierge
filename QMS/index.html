@@ -466,7 +466,7 @@
     }
   };
 
-  // Routing via Order ID
+  // Helper Routing Function
   function calculateRoute(startLat, startLng, endLat, endLng) {
     if (routingControl !== null) map.removeControl(routingControl);
     routingControl = L.Routing.control({
@@ -476,11 +476,30 @@
     }).addTo(map);
   }
 
+  // OPTION 2: Live GPS Navigation with Home Base Fallback
   window.navigateToCustomer = function(orderId) {
     const order = orders.find(o => o.id === orderId);
     if (!order) return;
-    calculateRoute(userStartPos.lat, userStartPos.lng, order.lat, order.lng);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+
+    if ("geolocation" in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const currentLat = position.coords.latitude;
+          const currentLng = position.coords.longitude;
+          calculateRoute(currentLat, currentLng, order.lat, order.lng);
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        },
+        (error) => {
+          alert("GPS unavailable or permission denied. Falling back to Home Base location.");
+          calculateRoute(userStartPos.lat, userStartPos.lng, order.lat, order.lng);
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      );
+    } else {
+      calculateRoute(userStartPos.lat, userStartPos.lng, order.lat, order.lng);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
   };
 
   window.navigateToShop = function(orderId) {
@@ -488,8 +507,26 @@
     if (!order) return;
     const shop = customShops.find(s => s.name === order.shop);
     if (!shop) return alert("Select a valid assigned shop first!");
-    calculateRoute(order.lat, order.lng, shop.lat, shop.lng);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+
+    if ("geolocation" in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const currentLat = position.coords.latitude;
+          const currentLng = position.coords.longitude;
+          calculateRoute(currentLat, currentLng, shop.lat, shop.lng);
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        },
+        (error) => {
+          alert("GPS unavailable or permission denied. Falling back to Home Base location.");
+          calculateRoute(userStartPos.lat, userStartPos.lng, shop.lat, shop.lng);
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      );
+    } else {
+      calculateRoute(userStartPos.lat, userStartPos.lng, shop.lat, shop.lng);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
   };
 
   function renderOrders() {
