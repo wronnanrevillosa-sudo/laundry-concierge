@@ -2,7 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Locked viewport to prevent full page pinch-to-zoom on mobile -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Ilayang Iyam Laundry Concierge</title>
 
   <!-- Leaflet CSS -->
@@ -19,12 +20,18 @@
       --border: #e5e7eb;
     }
 
+    /* Lock body from horizontal bouncing/overscroll on mobile */
+    html, body {
+      overflow-x: hidden;
+      touch-action: manipulation;
+    }
+
     body {
       font-family: system-ui, -apple-system, sans-serif;
       background-color: var(--bg);
       color: var(--text);
       margin: 0;
-      padding: 20px;
+      padding: 15px;
     }
 
     .container {
@@ -34,18 +41,20 @@
 
     .card {
       background: var(--card);
-      padding: 20px;
+      padding: 15px;
       border-radius: 8px;
       box-shadow: 0 1px 3px rgba(0,0,0,0.1);
       margin-bottom: 20px;
     }
 
     #map {
-      height: 400px;
+      height: 380px;
       width: 100%;
       border-radius: 8px;
       border: 1px solid var(--border);
       z-index: 1;
+      /* Prevents browser-level pinch-zoom while interacting with the map */
+      touch-action: none;
     }
 
     .map-controls {
@@ -82,7 +91,7 @@
 
     .shop-list-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
       gap: 10px;
       margin-top: 15px;
       text-align: left;
@@ -189,7 +198,7 @@
 <body>
 
 <div class="container">
-  <h1>🧺 Laundry Concierge Tracker (Ilayang Iyam Zone)</h1>
+  <h1 style="font-size: 1.5rem;">🧺 Laundry Concierge Tracker</h1>
 
   <!-- Map Card -->
   <div class="card">
@@ -275,9 +284,9 @@
   const shopsRef = collection(db, "shops");
   const settingsRef = doc(db, "settings", "user_config");
 
-  // Global Variables
+  // Global Variables - Home Base Set Here:
   let activeMode = 'normal';
-  let userStartPos = { lat: 13.9408, lng: 121.6145 };
+  let userStartPos = { lat: 13.937577, lng: 121.604071 };
   let customShops = [];
   let orders = [];
 
@@ -287,7 +296,12 @@
   let orderCustomerMarkers = [];
   let routingControl = null;
 
-  const map = L.map('map').setView([userStartPos.lat, userStartPos.lng], 16);
+  // Initialize map centered at Home Base
+  const map = L.map('map', {
+    tap: false,
+    touchZoom: true,
+    bounceAtZoomLimits: false
+  }).setView([userStartPos.lat, userStartPos.lng], 16);
 
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,
@@ -309,7 +323,7 @@
   function renderStartMarker() {
     if (startMarker) map.removeLayer(startMarker);
     startMarker = L.marker([userStartPos.lat, userStartPos.lng], { icon: greenStartIcon }).addTo(map);
-    startMarker.bindPopup("<b>🏠 Your Starting Hub</b>");
+    startMarker.bindPopup("<b>🏠 Your Home Starting Base</b>");
   }
 
   window.setMapMode = function(mode) {
@@ -337,10 +351,12 @@
 
   // Realtime Database Listeners
   onSnapshot(settingsRef, (docSnap) => {
-    if (docSnap.exists()) {
+    if (docSnap.exists() && docSnap.data().startPos) {
       userStartPos = docSnap.data().startPos;
-      renderStartMarker();
+    } else {
+      setDoc(settingsRef, { startPos: userStartPos });
     }
+    renderStartMarker();
   });
 
   onSnapshot(shopsRef, (snapshot) => {
@@ -425,7 +441,7 @@
     }
   };
 
-  // Routing
+  // Routing via Order ID
   function calculateRoute(startLat, startLng, endLat, endLng) {
     if (routingControl !== null) map.removeControl(routingControl);
     routingControl = L.Routing.control({
@@ -435,14 +451,16 @@
     }).addTo(map);
   }
 
-  window.navigateToCustomer = function(index) {
-    const order = orders[index];
+  window.navigateToCustomer = function(orderId) {
+    const order = orders.find(o => o.id === orderId);
+    if (!order) return;
     calculateRoute(userStartPos.lat, userStartPos.lng, order.lat, order.lng);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  window.navigateToShop = function(index) {
-    const order = orders[index];
+  window.navigateToShop = function(orderId) {
+    const order = orders.find(o => o.id === orderId);
+    if (!order) return;
     const shop = customShops.find(s => s.name === order.shop);
     if (!shop) return alert("Select a valid assigned shop first!");
     calculateRoute(order.lat, order.lng, shop.lat, shop.lng);
@@ -453,15 +471,20 @@
     const ordersList = document.getElementById('ordersList');
     ordersList.innerHTML = '';
 
+    // Clear existing customer markers from map
     orderCustomerMarkers.forEach(m => map.removeLayer(m));
     orderCustomerMarkers = [];
 
-    if (orders.length === 0) {
-      ordersList.innerHTML = '<p>No orders currently logged.</p>';
+    // Filter out orders that are marked as delivered
+    const activeOrders = orders.filter(order => order.status !== 'Delivered to Customer');
+
+    if (activeOrders.length === 0) {
+      ordersList.innerHTML = '<p style="color: #6b7280; font-size: 14px;">No active orders currently pending.</p>';
       return;
     }
 
-    orders.forEach((order, index) => {
+    activeOrders.forEach((order) => {
+      // Place customer pin on map for active orders
       if (order.lat && order.lng) {
         const cMarker = L.marker([order.lat, order.lng], { icon: redCustomerIcon }).addTo(map);
         cMarker.bindPopup(`<b>👤 ${order.name}</b>`);
@@ -488,8 +511,8 @@
           </div>
         </div>
         <div class="nav-actions">
-          <button class="nav-btn" onclick="window.navigateToCustomer(${index})">🚗 Navigate to Customer</button>
-          <button class="nav-btn shop" onclick="window.navigateToShop(${index})">🏬 Navigate to Shop</button>
+          <button class="nav-btn" onclick="window.navigateToCustomer('${order.id}')">🚗 Navigate to Customer</button>
+          <button class="nav-btn shop" onclick="window.navigateToShop('${order.id}')">🏬 Navigate to Shop</button>
         </div>
       `;
       ordersList.appendChild(div);
