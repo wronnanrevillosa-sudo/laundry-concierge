@@ -243,7 +243,7 @@
 
   <!-- Active Orders -->
   <div class="card">
-    <h2 style="font-size: 1.1rem; margin-top: 0;">All Customer Orders</h2>
+    <h2 style="font-size: 1.1rem; margin-top: 0;">Active Customer Orders</h2>
     <div id="ordersList"></div>
   </div>
 </div>
@@ -409,19 +409,25 @@
     orderCustomerMarkers.forEach(m => map.removeLayer(m));
     orderCustomerMarkers = [];
 
-    if (orders.length === 0) {
-      ordersList.innerHTML = '<p style="color: #6b7280; font-size: 14px;">No customer orders currently saved.</p>';
-      return;
-    }
-
-    // Always display all customer locations on the map
+    // 1. ALL customer pins are placed on the map permanently
     orders.forEach((order) => {
       if (order.lat && order.lng) {
         const cMarker = L.marker([order.lat, order.lng], { icon: redCustomerIcon }).addTo(map);
         cMarker.bindPopup(`<b>👤 ${order.name}</b><br>${order.phone}<br>Status: ${order.status}`);
         orderCustomerMarkers.push(cMarker);
       }
+    });
 
+    // 2. Filter out "Delivered to Customer" orders from the bottom list
+    const activeOrders = orders.filter(order => order.status !== 'Delivered to Customer');
+
+    if (activeOrders.length === 0) {
+      ordersList.innerHTML = '<p style="color: #6b7280; font-size: 14px;">No active orders currently pending.</p>';
+      return;
+    }
+
+    // Render active orders in the list
+    activeOrders.forEach((order) => {
       const div = document.createElement('div');
       div.className = 'order-item';
       div.innerHTML = `
