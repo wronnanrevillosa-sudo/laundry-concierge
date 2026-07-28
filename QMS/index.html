@@ -132,7 +132,7 @@
       box-sizing: border-box !important;
     }
 
-    form input, form select, form button {
+    form input, form select, form button, .search-input {
       display: block !important;
       width: 100% !important;
       max-width: 100% !important;
@@ -142,6 +142,11 @@
       border-radius: 6px;
       font-size: 14px;
       box-sizing: border-box !important;
+    }
+
+    .search-input {
+      margin-bottom: 12px;
+      background-color: #f9fafb;
     }
 
     button {
@@ -171,6 +176,17 @@
 
     .order-info h3 { margin: 0 0 4px 0; font-size: 15px; }
     .order-info p { margin: 2px 0; color: #6b7280; font-size: 13px; }
+
+    .preferred-tag {
+      display: inline-block;
+      background-color: #dbeafe;
+      color: #1e40af;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 6px;
+      border-radius: 4px;
+      margin-top: 2px;
+    }
 
     .order-actions {
       display: flex;
@@ -223,7 +239,7 @@
   <div class="card">
     <h2 style="font-size: 1.1rem; margin-top: 0;">New Pickup Request</h2>
     <form id="orderForm">
-      <input type="text" id="customerName" placeholder="Customer Name" required>
+      <input type="text" id="customerName" placeholder="Customer Name" required oninput="checkCustomerPreference()">
       <input type="tel" id="customerPhone" placeholder="Phone Number" required>
       
       <input type="hidden" id="customerLat">
@@ -241,9 +257,10 @@
     </form>
   </div>
 
-  <!-- Active Orders -->
+  <!-- Customer Search & Active Orders -->
   <div class="card">
     <h2 style="font-size: 1.1rem; margin-top: 0;">Active Customer Orders</h2>
+    <input type="text" id="searchInput" class="search-input" placeholder="🔍 Search customer name or shop..." oninput="renderOrders()">
     <div id="ordersList"></div>
   </div>
 </div>
@@ -326,6 +343,18 @@
     }
   };
 
+  // Auto-detect preferred laundry shop when entering existing customer name
+  window.checkCustomerPreference = function() {
+    const inputName = document.getElementById('customerName').value.trim().toLowerCase();
+    if (!inputName) return;
+
+    const existingOrder = orders.find(o => o.name && o.name.toLowerCase() === inputName && o.shop);
+    if (existingOrder) {
+      const shopSelect = document.getElementById('laundryShop');
+      shopSelect.value = existingOrder.shop;
+    }
+  };
+
   // Realtime Database Listeners
   onSnapshot(shopsRef, (snapshot) => {
     customShops = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -401,28 +430,40 @@
     }
   };
 
-  function renderOrders() {
+  window.renderOrders = function() {
     const ordersList = document.getElementById('ordersList');
+    const searchQuery = document.getElementById('searchInput').value.trim().toLowerCase();
     ordersList.innerHTML = '';
 
     // Clear existing customer markers from map
     orderCustomerMarkers.forEach(m => map.removeLayer(m));
     orderCustomerMarkers = [];
 
-    // 1. ALL customer pins are placed on the map permanently
+    // 1. ALL customer pins placed on map permanently
     orders.forEach((order) => {
       if (order.lat && order.lng) {
         const cMarker = L.marker([order.lat, order.lng], { icon: redCustomerIcon }).addTo(map);
-        cMarker.bindPopup(`<b>👤 ${order.name}</b><br>${order.phone}<br>Status: ${order.status}`);
+        cMarker.bindPopup(`<b>👤 ${order.name}</b><br>📱 ${order.phone}<br>🏬 Preferred Shop: <b>${order.shop || 'None'}</b><br>Status: ${order.status}`);
         orderCustomerMarkers.push(cMarker);
       }
     });
 
     // 2. Filter out "Delivered to Customer" orders from the bottom list
-    const activeOrders = orders.filter(order => order.status !== 'Delivered to Customer');
+    let activeOrders = orders.filter(order => order.status !== 'Delivered to Customer');
+
+    // 3. Apply Search Filter if search query exists
+    if (searchQuery !== '') {
+      activeOrders = activeOrders.filter(order => 
+        (order.name && order.name.toLowerCase().includes(searchQuery)) ||
+        (order.phone && order.phone.toLowerCase().includes(searchQuery)) ||
+        (order.shop && order.shop.toLowerCase().includes(searchQuery))
+      );
+    }
 
     if (activeOrders.length === 0) {
-      ordersList.innerHTML = '<p style="color: #6b7280; font-size: 14px;">No active orders currently pending.</p>';
+      ordersList.innerHTML = searchQuery 
+        ? `<p style="color: #6b7280; font-size: 14px;">No matching customers or orders found for "${searchQuery}".</p>`
+        : '<p style="color: #6b7280; font-size: 14px;">No active orders currently pending.</p>';
       return;
     }
 
@@ -434,8 +475,9 @@
         <div class="order-header">
           <div class="order-info">
             <h3 onclick="window.focusShop(${order.lat}, ${order.lng})" style="cursor:pointer; color:#2563eb;">👤 ${order.name} (${order.phone})</h3>
-            <p><strong>Pinned Coords:</strong> ${order.lat.toFixed(4)}, ${order.lng.toFixed(4)}</p>
-            <p><strong>Shop:</strong> ${order.shop || 'Unassigned'} | <strong>Weight:</strong> ${order.weight ? order.weight + ' kg' : 'N/A'}</p>
+            <span class="preferred-tag">🏬 Preferred Shop: ${order.shop || 'Unassigned'}</span>
+            <p style="margin-top: 6px;"><strong>Pinned Coords:</strong> ${order.lat.toFixed(4)}, ${order.lng.toFixed(4)}</p>
+            <p><strong>Weight:</strong> ${order.weight ? order.weight + ' kg' : 'N/A'}</p>
           </div>
           <div class="order-actions">
             <select class="status-select" onchange="window.updateStatus('${order.id}', this.value)">
@@ -450,7 +492,7 @@
       `;
       ordersList.appendChild(div);
     });
-  }
+  };
 
   document.getElementById('orderForm').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -461,8 +503,8 @@
     if (!cLat || !cLng) return alert("Please pin the location on the map first!");
 
     await addDoc(ordersRef, {
-      name: document.getElementById('customerName').value,
-      phone: document.getElementById('customerPhone').value,
+      name: document.getElementById('customerName').value.trim(),
+      phone: document.getElementById('customerPhone').value.trim(),
       shop: document.getElementById('laundryShop').value,
       weight: document.getElementById('weight').value,
       lat: cLat,
