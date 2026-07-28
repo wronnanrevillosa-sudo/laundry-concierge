@@ -159,6 +159,19 @@
 
     button:hover { opacity: 0.9; }
 
+    .btn-secondary {
+      background: #4b5563;
+      color: white;
+      padding: 12px;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 600;
+      width: 100%;
+      border: none;
+      cursor: pointer;
+      margin-bottom: 15px;
+    }
+
     .order-item {
       border: 1px solid var(--border);
       padding: 12px;
@@ -214,12 +227,96 @@
       font-weight: 600;
       word-break: break-word;
     }
+
+    /* Modal Overlay & Card Styling */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 9999;
+      justify-content: center;
+      align-items: center;
+      padding: 12px;
+      box-sizing: border-box;
+    }
+
+    .modal-card {
+      background: #ffffff;
+      width: 100%;
+      max-width: 500px;
+      max-height: 85vh;
+      border-radius: 10px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+      display: flex;
+      flex-direction: column;
+      padding: 16px;
+      box-sizing: border-box;
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .modal-header h2 {
+      margin: 0;
+      font-size: 1.1rem;
+    }
+
+    .close-modal-btn {
+      background: #e5e7eb;
+      color: #374151;
+      border: none;
+      border-radius: 50%;
+      width: 28px;
+      height: 28px;
+      font-size: 14px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal-body {
+      overflow-y: auto;
+      flex: 1;
+      margin-top: 8px;
+    }
+
+    .customer-card-item {
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px 12px;
+      margin-bottom: 8px;
+      background: #f9fafb;
+    }
+
+    .customer-card-item h4 {
+      margin: 0 0 4px 0;
+      font-size: 14px;
+      color: #111827;
+    }
+
+    .customer-card-item p {
+      margin: 2px 0;
+      font-size: 12px;
+      color: #4b5563;
+    }
   </style>
 </head>
 <body>
 
 <div class="container">
   <h1 style="font-size: 1.3rem; margin: 5px 0 15px 0;">🧺 Laundry Concierge Tracker</h1>
+
+  <!-- Trigger Button for Customer Popup Card -->
+  <button class="btn-secondary" onclick="openCustomerModal()">👥 View All Customers & Preferences</button>
 
   <!-- Map Card -->
   <div class="card">
@@ -257,11 +354,22 @@
     </form>
   </div>
 
-  <!-- Customer Search & Orders List -->
+  <!-- Active Orders List -->
   <div class="card">
-    <h2 style="font-size: 1.1rem; margin-top: 0;">Customer Orders</h2>
-    <input type="text" id="searchInput" class="search-input" placeholder="🔍 Search customer name, phone, or shop..." onkeyup="renderOrders()">
+    <h2 style="font-size: 1.1rem; margin-top: 0;">Active Customer Orders</h2>
     <div id="ordersList"></div>
+  </div>
+</div>
+
+<!-- Customer & Preferences Modal Popup -->
+<div id="customerModal" class="modal-overlay">
+  <div class="modal-card">
+    <div class="modal-header">
+      <h2>👥 Customers & Preferred Shops</h2>
+      <button class="close-modal-btn" onclick="closeCustomerModal()">✕</button>
+    </div>
+    <input type="text" id="modalSearchInput" class="search-input" placeholder="🔍 Search customer name, phone, or shop..." onkeyup="renderCustomerDirectory()">
+    <div id="customerDirectoryList" class="modal-body"></div>
   </div>
 </div>
 
@@ -364,6 +472,7 @@
   onSnapshot(ordersRef, (snapshot) => {
     orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     renderOrders();
+    renderCustomerDirectory();
   });
 
   function renderShops() {
@@ -422,7 +531,10 @@
     }
   });
 
-  window.focusShop = function(lat, lng) { map.flyTo([lat, lng], 18); };
+  window.focusShop = function(lat, lng) { 
+    map.flyTo([lat, lng], 18);
+    closeCustomerModal();
+  };
 
   window.deleteShop = async function(id) {
     if (confirm("Delete this shop?")) {
@@ -430,18 +542,16 @@
     }
   };
 
+  // Render main active orders on page
   window.renderOrders = function() {
     const ordersList = document.getElementById('ordersList');
-    const searchElem = document.getElementById('searchInput');
-    const searchQuery = searchElem ? searchElem.value.trim().toLowerCase() : '';
-    
     ordersList.innerHTML = '';
 
     // Clear existing customer markers from map
     orderCustomerMarkers.forEach(m => map.removeLayer(m));
     orderCustomerMarkers = [];
 
-    // 1. Render all customer pins on map permanently
+    // 1. Render map pins
     orders.forEach((order) => {
       if (order.lat && order.lng) {
         const cMarker = L.marker([order.lat, order.lng], { icon: redCustomerIcon }).addTo(map);
@@ -450,31 +560,15 @@
       }
     });
 
-    // 2. Filter rules:
-    // If searching -> search ALL records (including Delivered)
-    // If not searching -> show active orders only (exclude Delivered)
-    let displayOrders = orders;
+    // 2. Active orders only for main list
+    const activeOrders = orders.filter(order => order.status !== 'Delivered to Customer');
 
-    if (searchQuery !== '') {
-      displayOrders = displayOrders.filter(order => {
-        const nameMatch = order.name ? order.name.toLowerCase().includes(searchQuery) : false;
-        const phoneMatch = order.phone ? order.phone.toLowerCase().includes(searchQuery) : false;
-        const shopMatch = order.shop ? order.shop.toLowerCase().includes(searchQuery) : false;
-        return nameMatch || phoneMatch || shopMatch;
-      });
-    } else {
-      displayOrders = displayOrders.filter(order => order.status !== 'Delivered to Customer');
-    }
-
-    if (displayOrders.length === 0) {
-      ordersList.innerHTML = searchQuery 
-        ? `<p style="color: #6b7280; font-size: 14px;">No customers or orders found matching "${searchQuery}".</p>`
-        : '<p style="color: #6b7280; font-size: 14px;">No active orders currently pending.</p>';
+    if (activeOrders.length === 0) {
+      ordersList.innerHTML = '<p style="color: #6b7280; font-size: 14px;">No active orders currently pending.</p>';
       return;
     }
 
-    // 3. Render filtered/searched list
-    displayOrders.forEach((order) => {
+    activeOrders.forEach((order) => {
       const div = document.createElement('div');
       div.className = 'order-item';
       div.innerHTML = `
@@ -499,6 +593,55 @@
       `;
       ordersList.appendChild(div);
     });
+  };
+
+  // Render popup modal customer list & search
+  window.renderCustomerDirectory = function() {
+    const directoryList = document.getElementById('customerDirectoryList');
+    const searchElem = document.getElementById('modalSearchInput');
+    const query = searchElem ? searchElem.value.trim().toLowerCase() : '';
+
+    if (!directoryList) return;
+    directoryList.innerHTML = '';
+
+    let filtered = orders;
+
+    if (query !== '') {
+      filtered = filtered.filter(o => 
+        (o.name && o.name.toLowerCase().includes(query)) ||
+        (o.phone && o.phone.toLowerCase().includes(query)) ||
+        (o.shop && o.shop.toLowerCase().includes(query))
+      );
+    }
+
+    if (filtered.length === 0) {
+      directoryList.innerHTML = query 
+        ? `<p style="color: #6b7280; font-size: 13px;">No customers found matching "${query}".</p>`
+        : '<p style="color: #6b7280; font-size: 13px;">No customer records yet.</p>';
+      return;
+    }
+
+    filtered.forEach(cust => {
+      const card = document.createElement('div');
+      card.className = 'customer-card-item';
+      card.innerHTML = `
+        <h4 onclick="window.focusShop(${cust.lat}, ${cust.lng})" style="cursor:pointer; color:#2563eb;">👤 ${cust.name || 'Unnamed'}</h4>
+        <p>📱 <strong>Phone:</strong> ${cust.phone || 'N/A'}</p>
+        <p><span class="preferred-tag">🏬 Preferred Shop: ${cust.shop || 'Unassigned'}</span></p>
+        <p><strong>Status:</strong> ${cust.status}</p>
+      `;
+      directoryList.appendChild(card);
+    });
+  };
+
+  // Modal Handlers
+  window.openCustomerModal = function() {
+    document.getElementById('customerModal').style.display = 'flex';
+    renderCustomerDirectory();
+  };
+
+  window.closeCustomerModal = function() {
+    document.getElementById('customerModal').style.display = 'none';
   };
 
   document.getElementById('orderForm').addEventListener('submit', async (e) => {
