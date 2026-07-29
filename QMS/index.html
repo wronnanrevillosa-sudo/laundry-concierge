@@ -551,11 +551,11 @@
     orderCustomerMarkers.forEach(m => map.removeLayer(m));
     orderCustomerMarkers = [];
 
-    // 1. Render map pins
+    // 1. Render map pins without status text
     orders.forEach((order) => {
       if (order.lat && order.lng) {
         const cMarker = L.marker([order.lat, order.lng], { icon: redCustomerIcon }).addTo(map);
-        cMarker.bindPopup(`<b>👤 ${order.name || 'Unnamed'}</b><br>📱 ${order.phone || 'N/A'}<br>🏬 Preferred Shop: <b>${order.shop || 'None'}</b><br>Status: ${order.status}`);
+        cMarker.bindPopup(`<b>👤 ${order.name || 'Unnamed'}</b><br>📱 ${order.phone || 'N/A'}<br>🏬 Preferred Shop: <b>${order.shop || 'None'}</b>`);
         orderCustomerMarkers.push(cMarker);
       }
     });
