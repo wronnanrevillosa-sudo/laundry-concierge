@@ -41,6 +41,27 @@
       box-sizing: border-box;
     }
 
+    .action-buttons-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 15px;
+    }
+
+    .btn-action {
+      padding: 12px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      border: none;
+      cursor: pointer;
+      color: white;
+      text-align: center;
+    }
+
+    .btn-primary { background: var(--primary); }
+    .btn-secondary { background: #4b5563; }
+
     .card {
       background: var(--card);
       padding: 12px;
@@ -158,19 +179,6 @@
     }
 
     button:hover { opacity: 0.9; }
-
-    .btn-secondary {
-      background: #4b5563;
-      color: white;
-      padding: 12px;
-      border-radius: 6px;
-      font-size: 14px;
-      font-weight: 600;
-      width: 100%;
-      border: none;
-      cursor: pointer;
-      margin-bottom: 15px;
-    }
 
     .order-item {
       border: 1px solid var(--border);
@@ -315,8 +323,11 @@
 <div class="container">
   <h1 style="font-size: 1.3rem; margin: 5px 0 15px 0;">🧺 Laundry Concierge Tracker</h1>
 
-  <!-- Trigger Button for Customer Popup Card -->
-  <button class="btn-secondary" onclick="openCustomerModal()">👥 View All Customers & Preferences</button>
+  <!-- Navigation Action Buttons -->
+  <div class="action-buttons-grid">
+    <button class="btn-action btn-primary" onclick="openOrderModal()">➕ New Pickup Request</button>
+    <button class="btn-action btn-secondary" onclick="openCustomerModal()">👥 Customer Directory</button>
+  </div>
 
   <!-- Map Card -->
   <div class="card">
@@ -332,28 +343,6 @@
     <div id="shopListGrid" class="shop-list-grid"></div>
   </div>
 
-  <!-- New Pickup Request Form -->
-  <div class="card">
-    <h2 style="font-size: 1.1rem; margin-top: 0;">New Pickup Request</h2>
-    <form id="orderForm">
-      <input type="text" id="customerName" placeholder="Customer Name" required oninput="checkCustomerPreference()">
-      <input type="tel" id="customerPhone" placeholder="Phone Number" required>
-      
-      <input type="hidden" id="customerLat">
-      <input type="hidden" id="customerLng">
-
-      <select id="laundryShop">
-        <option value="">Select Target Laundry Shop...</option>
-      </select>
-
-      <input type="number" step="0.1" id="weight" placeholder="Est. Weight (kg)">
-      
-      <span id="pinStatusLabel" class="coords-badge">⚠️ Please click "Pin Customer Location" on the map to choose address spot!</span>
-
-      <button type="submit">+ Add New Order</button>
-    </form>
-  </div>
-
   <!-- Active Orders List -->
   <div class="card">
     <h2 style="font-size: 1.1rem; margin-top: 0;">Active Customer Orders</h2>
@@ -361,7 +350,36 @@
   </div>
 </div>
 
-<!-- Customer & Preferences Modal Popup -->
+<!-- Popup Modal: New Pickup Request Form -->
+<div id="orderModal" class="modal-overlay">
+  <div class="modal-card">
+    <div class="modal-header">
+      <h2>🧺 New Pickup Request</h2>
+      <button class="close-modal-btn" onclick="closeOrderModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <form id="orderForm">
+        <input type="text" id="customerName" placeholder="Customer Name" required oninput="checkCustomerPreference()">
+        <input type="tel" id="customerPhone" placeholder="Phone Number" required>
+        
+        <input type="hidden" id="customerLat">
+        <input type="hidden" id="customerLng">
+
+        <select id="laundryShop">
+          <option value="">Select Target Laundry Shop...</option>
+        </select>
+
+        <input type="number" step="0.1" id="weight" placeholder="Est. Weight (kg)">
+        
+        <span id="pinStatusLabel" class="coords-badge">⚠️ Please click "Pin Customer Location" on the map to choose address spot!</span>
+
+        <button type="submit">+ Save Pickup Request</button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Popup Modal: Customer Directory & Preferences -->
 <div id="customerModal" class="modal-overlay">
   <div class="modal-card">
     <div class="modal-header">
@@ -522,6 +540,9 @@
       tempCustomerMarker.bindPopup("<b>📍 Selected Customer Pin</b>").openPopup();
 
       togglePinMode();
+      
+      // Auto-open pickup request popup after pinning location on map
+      openOrderModal();
       return;
     }
     
@@ -634,7 +655,16 @@
     });
   };
 
-  // Modal Handlers
+  // Modal Handlers: Pickup Request
+  window.openOrderModal = function() {
+    document.getElementById('orderModal').style.display = 'flex';
+  };
+
+  window.closeOrderModal = function() {
+    document.getElementById('orderModal').style.display = 'none';
+  };
+
+  // Modal Handlers: Customer Directory
   window.openCustomerModal = function() {
     document.getElementById('customerModal').style.display = 'flex';
     renderCustomerDirectory();
@@ -668,6 +698,8 @@
     document.getElementById('customerLng').value = '';
     document.getElementById('pinStatusLabel').innerHTML = '⚠️ Please click "Pin Customer Location" on the map to choose address spot!';
     if (tempCustomerMarker) map.removeLayer(tempCustomerMarker);
+
+    closeOrderModal();
   });
 
   window.updateStatus = async function(id, newStatus) {
