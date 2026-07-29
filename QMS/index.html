@@ -236,6 +236,19 @@
       word-break: break-word;
     }
 
+    .map-reorder-btn {
+      margin-top: 8px;
+      background: #2563eb;
+      color: white;
+      border: none;
+      padding: 6px 10px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      width: 100%;
+    }
+
     /* Modal Overlay & Card Styling */
     .modal-overlay {
       display: none;
@@ -471,6 +484,24 @@
     }
   };
 
+  // Auto-fill form and set active request directly from map pin
+  window.reorderCustomer = function(name, phone, shop, lat, lng) {
+    document.getElementById('customerName').value = name || '';
+    document.getElementById('customerPhone').value = phone || '';
+    document.getElementById('customerLat').value = lat || '';
+    document.getElementById('customerLng').value = lng || '';
+    document.getElementById('weight').value = '';
+
+    const shopSelect = document.getElementById('laundryShop');
+    if (shop) shopSelect.value = shop;
+
+    if (lat && lng) {
+      document.getElementById('pinStatusLabel').innerHTML = `✅ Location Set: (${parseFloat(lat).toFixed(4)}, ${parseFloat(lng).toFixed(4)})`;
+    }
+
+    openOrderModal();
+  };
+
   // Auto-detect preferred laundry shop when entering existing customer name
   window.checkCustomerPreference = function() {
     const inputName = document.getElementById('customerName').value.trim().toLowerCase();
@@ -574,11 +605,21 @@
     orderCustomerMarkers.forEach(m => map.removeLayer(m));
     orderCustomerMarkers = [];
 
-    // 1. Render map pins without status text
+    // 1. Render map pins with direct re-order option
     orders.forEach((order) => {
       if (order.lat && order.lng) {
         const cMarker = L.marker([order.lat, order.lng], { icon: redCustomerIcon }).addTo(map);
-        cMarker.bindPopup(`<b>👤 ${order.name || 'Unnamed'}</b><br>📱 ${order.phone || 'N/A'}<br>🏬 Preferred Shop: <b>${order.shop || 'None'}</b>`);
+        
+        const popupContent = `
+          <b>👤 ${order.name || 'Unnamed'}</b><br>
+          📱 ${order.phone || 'N/A'}<br>
+          🏬 Preferred Shop: <b>${order.shop || 'None'}</b><br>
+          <button class="map-reorder-btn" onclick="window.reorderCustomer('${(order.name || '').replace(/'/g, "\\'")}', '${order.phone || ''}', '${(order.shop || '').replace(/'/g, "\\'")}', ${order.lat}, ${order.lng})">
+            🔄 Re-order / Set Active Request
+          </button>
+        `;
+        
+        cMarker.bindPopup(popupContent);
         orderCustomerMarkers.push(cMarker);
       }
     });
@@ -652,6 +693,9 @@
         <p>📱 <strong>Phone:</strong> ${cust.phone || 'N/A'}</p>
         <p><span class="preferred-tag">🏬 Preferred Shop: ${cust.shop || 'Unassigned'}</span></p>
         <p><strong>Status:</strong> ${cust.status}</p>
+        <button class="map-reorder-btn" style="margin-top:5px;" onclick="window.reorderCustomer('${(cust.name || '').replace(/'/g, "\\'")}', '${cust.phone || ''}', '${(cust.shop || '').replace(/'/g, "\\'")}', ${cust.lat}, ${cust.lng})">
+          🔄 Re-order / New Pickup Request
+        </button>
       `;
       directoryList.appendChild(card);
     });
